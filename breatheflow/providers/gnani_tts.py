@@ -137,6 +137,36 @@ class GnaniTTSAdapter(TTSProvider):
                 status_code=status_code,
             )
 
+        # Validate that the response is binary audio, not a JSON error response returned with HTTP 200
+        is_json_header = "application/json" in content_type.lower()
+        starts_with_json = audio_bytes.strip().startswith((b"{", b"["))
+
+        if is_json_header or starts_with_json:
+            try:
+                decoded_str = audio_bytes.decode("utf-8")
+                parsed = json.loads(decoded_str)
+                if isinstance(parsed, dict):
+                    err_msg = (
+                        parsed.get("message")
+                        or parsed.get("error")
+                        or parsed.get("detail")
+                        or "API returned JSON response instead of audio"
+                    )
+                    raise GnaniAPIError(
+                        f"Gnani TTS returned error response: {err_msg}",
+                        status_code=status_code,
+                        response_body=decoded_str,
+                    )
+            except UnicodeDecodeError:
+                pass
+            except json.JSONDecodeError:
+                if is_json_header:
+                    raise GnaniAPIError(
+                        "Gnani TTS returned malformed JSON with Content-Type application/json",
+                        status_code=status_code,
+                        response_body=audio_bytes.decode("utf-8", errors="replace"),
+                    )
+
         return TTSAudio(
             audio_bytes=audio_bytes,
             content_type=content_type,

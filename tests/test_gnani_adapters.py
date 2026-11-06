@@ -177,6 +177,35 @@ class TestGnaniTTSAdapter(unittest.TestCase):
         self.assertIn("empty audio response", str(ctx.exception))
 
     @patch("urllib.request.urlopen")
+    def test_http_200_with_json_error_response(self, mock_urlopen: MagicMock) -> None:
+        """Test that a JSON error payload returned with HTTP 200 is parsed and raised as GnaniAPIError."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.headers = {"Content-Type": "application/json"}
+        json_error = b'{"success": false, "message": "Voice quota exceeded for current key"}'
+        mock_response.read.return_value = json_error
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        with self.assertRaises(GnaniAPIError) as ctx:
+            self.adapter.synthesize("Breathe.")
+
+        self.assertIn("Voice quota exceeded", str(ctx.exception))
+
+    @patch("urllib.request.urlopen")
+    def test_http_200_with_malformed_json_header(self, mock_urlopen: MagicMock) -> None:
+        """Test that Content-Type application/json with invalid JSON body raises GnaniAPIError."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.read.return_value = b"{malformed_json"
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        with self.assertRaises(GnaniAPIError) as ctx:
+            self.adapter.synthesize("Breathe.")
+
+        self.assertIn("malformed JSON", str(ctx.exception))
+
+    @patch("urllib.request.urlopen")
     def test_http_error_handling(self, mock_urlopen: MagicMock) -> None:
         err = urllib.error.HTTPError(
             url="https://api.vachana.ai/api/v1/tts/inference",

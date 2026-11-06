@@ -74,9 +74,10 @@ flowchart LR
   - Gnani Timbre v2.5 REST TTS adapter (`breatheflow/providers/gnani_tts.py`).
   - Local Ollama Qwen3-4B prompt-only adapter (`breatheflow/providers/ollama_brain.py`).
   - Unit test suite with mocked HTTP responses (`tests/test_gnani_adapters.py` and `tests/test_ollama_brain.py`).
-- [ ] **M1.3 — Dialogue & Session Orchestrator**:
+- [x] **M1.3 — Dialogue & Session Orchestrator**:
   - Turn coordinator routing STT transcript $\rightarrow$ Ollama Brain $\rightarrow$ Timbre TTS speech $\rightarrow$ Controller initiation (`breatheflow/core/orchestrator.py`).
-  - CLI / runner script for interactive terminal voice session testing.
+  - CLI / runner script for interactive terminal voice session testing (`breatheflow/cli.py`).
+  - Unit test suite verifying turn flow, controller independence, and provider failures (`tests/test_orchestrator.py`).
 - [ ] **M1.4 — Submission Package & Delivery (Deadline: Nov 10, 11:59 PM IST)**:
   - Public demo video recording showing genuine Gnani STT & TTS integration with spoken conversation.
   - Documentation disclosure of Gnani APIs and architecture.
