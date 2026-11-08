@@ -55,8 +55,22 @@ class TestGnaniSTTAdapter(unittest.TestCase):
         # Verify request headers and URL
         called_req = mock_urlopen.call_args[0][0]
         self.assertEqual(called_req.get_header("X-api-key-id"), self.api_key)
+        self.assertEqual(called_req.get_header("User-agent"), "BreatheFlow-AI/0.1")
         self.assertIn("multipart/form-data", called_req.get_header("Content-type"))
         self.assertTrue(called_req.full_url.endswith("/stt/v3"))
+
+    @patch("urllib.request.urlopen")
+    def test_user_agent_header_included_in_request(self, mock_urlopen: MagicMock) -> None:
+        """Verify that an honest application User-Agent header is sent with the STT request."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = json.dumps({"success": True, "transcript": "test"}).encode("utf-8")
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        self.adapter.transcribe(b"dummy_audio")
+
+        called_req = mock_urlopen.call_args[0][0]
+        self.assertEqual(called_req.get_header("User-agent"), "BreatheFlow-AI/0.1")
 
     @patch("urllib.request.urlopen")
     def test_http_401_unauthorized_error(self, mock_urlopen: MagicMock) -> None:
@@ -152,6 +166,7 @@ class TestGnaniTTSAdapter(unittest.TestCase):
         # Inspect request
         called_req = mock_urlopen.call_args[0][0]
         self.assertEqual(called_req.get_header("X-api-key-id"), self.api_key)
+        self.assertEqual(called_req.get_header("User-agent"), "BreatheFlow-AI/0.1")
         self.assertEqual(called_req.get_header("Content-type"), "application/json")
         self.assertTrue(called_req.full_url.endswith("/api/v1/tts/inference"))
 
@@ -162,6 +177,20 @@ class TestGnaniTTSAdapter(unittest.TestCase):
         self.assertEqual(sent_body["speed"], 0.9)
         self.assertEqual(sent_body["language"], "en-IN")
         self.assertEqual(sent_body["model"], "timbre-v2.5")
+
+    @patch("urllib.request.urlopen")
+    def test_user_agent_header_included_in_tts_request(self, mock_urlopen: MagicMock) -> None:
+        """Verify that an honest application User-Agent header is sent with the TTS request."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.headers = {"Content-Type": "audio/wav"}
+        mock_response.read.return_value = b"RIFF" + b"\x00" * 44
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        self.adapter.synthesize("Take a deep breath.")
+
+        called_req = mock_urlopen.call_args[0][0]
+        self.assertEqual(called_req.get_header("User-agent"), "BreatheFlow-AI/0.1")
 
     @patch("urllib.request.urlopen")
     def test_empty_audio_response_raises_error(self, mock_urlopen: MagicMock) -> None:

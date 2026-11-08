@@ -102,6 +102,7 @@ class GnaniTTSAdapter(TTSProvider):
         headers = {
             "Content-Type": "application/json",
             "X-API-Key-ID": self._api_key,
+            "User-Agent": "BreatheFlow-AI/0.1",
         }
 
         req = urllib.request.Request(

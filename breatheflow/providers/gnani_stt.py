@@ -120,6 +120,7 @@ class GnaniSTTAdapter(STTProvider):
         headers = {
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "X-API-Key-ID": self._api_key,
+            "User-Agent": "BreatheFlow-AI/0.1",
         }
 
         req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
