@@ -38,3 +38,33 @@ class OllamaResponseError(OllamaError):
     """Raised when Ollama returns an invalid or unexpected response."""
 
     pass
+
+
+class GeminiError(ProviderError):
+    """Base exception for Gemini conversational brain errors."""
+
+    pass
+
+
+class GeminiAuthError(GeminiError):
+    """Raised when Gemini API key is missing or unauthorized."""
+
+    pass
+
+
+class GeminiRateLimitError(GeminiError):
+    """Raised when Gemini API quota or rate limit is exceeded."""
+
+    pass
+
+
+class GeminiResponseError(GeminiError):
+    """Raised when Gemini returns an empty, invalid, or malformed response."""
+
+    pass
+
+
+class GeminiConnectionError(GeminiError):
+    """Raised when unable to reach the Gemini API endpoint."""
+
+    pass
