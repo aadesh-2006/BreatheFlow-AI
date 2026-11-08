@@ -69,6 +69,42 @@ class TestBreathingProtocolValidation(unittest.TestCase):
         self.assertEqual(coherent.exhale_s, 5.5)
         self.assertEqual(coherent.hold_out_s, 0.0)
 
+    def test_from_name_preset_resolution(self) -> None:
+        """Verify BreathingProtocol.from_name correctly resolves standard presets and aliases."""
+        test_cases = [
+            ("box_breathing", "Box Breathing", 4.0, 4.0, 4.0, 4.0, 4),
+            ("box", "Box Breathing", 4.0, 4.0, 4.0, 4.0, 4),
+            ("box_breath", "Box Breathing", 4.0, 4.0, 4.0, 4.0, 4),
+            ("  Box-Breathing  ", "Box Breathing", 4.0, 4.0, 4.0, 4.0, 4),
+            ("four_seven_eight", "4-7-8 Relaxing Breath", 4.0, 7.0, 8.0, 0.0, 4),
+            ("4_7_8", "4-7-8 Relaxing Breath", 4.0, 7.0, 8.0, 0.0, 4),
+            ("4-7-8", "4-7-8 Relaxing Breath", 4.0, 7.0, 8.0, 0.0, 4),
+            ("4_7_8_breathing", "4-7-8 Relaxing Breath", 4.0, 7.0, 8.0, 0.0, 4),
+            ("coherent_breathing", "Coherent Breathing", 5.5, 0.0, 5.5, 0.0, 5),
+            ("coherent", "Coherent Breathing", 5.5, 0.0, 5.5, 0.0, 5),
+            ("resonant_breathing", "Coherent Breathing", 5.5, 0.0, 5.5, 0.0, 5),
+            ("physiological_sigh", "Physiological Sigh", 2.5, 1.0, 6.0, 0.0, 3),
+            ("sigh", "Physiological Sigh", 2.5, 1.0, 6.0, 0.0, 3),
+        ]
+        for name_input, expected_name, inhale, hold_in, exhale, hold_out, cycles in test_cases:
+            with self.subTest(name=name_input):
+                proto = BreathingProtocol.from_name(name_input)
+                self.assertIsNotNone(proto, f"Failed to resolve preset for '{name_input}'")
+                if proto:
+                    self.assertEqual(proto.name, expected_name)
+                    self.assertEqual(proto.inhale_s, inhale)
+                    self.assertEqual(proto.hold_in_s, hold_in)
+                    self.assertEqual(proto.exhale_s, exhale)
+                    self.assertEqual(proto.hold_out_s, hold_out)
+                    self.assertEqual(proto.cycles, cycles)
+
+    def test_from_name_invalid_or_none(self) -> None:
+        """Verify BreathingProtocol.from_name returns None for invalid, empty, or unrecognized inputs."""
+        invalid_inputs = ["", "   ", None, 123, "hyperventilation", "unknown_technique", "yoga_nidra"]
+        for bad_input in invalid_inputs:
+            with self.subTest(bad_input=bad_input):
+                self.assertIsNone(BreathingProtocol.from_name(bad_input))  # type: ignore[arg-type]
+
 
 class TestDeterministicControllerTransitions(unittest.TestCase):
     """Test phase transitions and cycle advancement."""

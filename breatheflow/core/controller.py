@@ -112,6 +112,25 @@ class BreathingProtocol:
             cycles=cycles,
         )
 
+    @classmethod
+    def from_name(cls, name: str) -> Optional["BreathingProtocol"]:
+        """Resolve a protocol identifier or common name to a standard BreathingProtocol preset.
+
+        Returns None if the protocol name is unrecognized.
+        """
+        if not name or not isinstance(name, str):
+            return None
+        normalized = name.strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized in ("box_breathing", "box", "box_breath"):
+            return cls.box_breathing()
+        if normalized in ("4_7_8", "four_seven_eight", "4_7_8_breathing", "4_7_8_relaxing_breath"):
+            return cls.four_seven_eight()
+        if normalized in ("coherent_breathing", "coherent", "resonant_breathing"):
+            return cls.coherent_breathing()
+        if normalized in ("physiological_sigh", "sigh"):
+            return cls.physiological_sigh()
+        return None
+
 
 @dataclass(frozen=True)
 class ControllerTick:
