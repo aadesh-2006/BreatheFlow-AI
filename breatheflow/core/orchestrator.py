@@ -125,14 +125,23 @@ class BreatheFlowOrchestrator:
             return None
 
         try:
-            protocol = BreathingProtocol(
-                name=suggested.get("protocol", "Guided Breathing"),
-                inhale_s=float(suggested["inhale_s"]),
-                hold_in_s=float(suggested["hold_in_s"]),
-                exhale_s=float(suggested["exhale_s"]),
-                hold_out_s=float(suggested["hold_out_s"]),
-                cycles=int(suggested["cycles"]),
-            )
+            if "inhale_s" in suggested and "exhale_s" in suggested:
+                protocol = BreathingProtocol(
+                    name=suggested.get("protocol", "Guided Breathing"),
+                    inhale_s=float(suggested["inhale_s"]),
+                    hold_in_s=float(suggested.get("hold_in_s", 0.0)),
+                    exhale_s=float(suggested["exhale_s"]),
+                    hold_out_s=float(suggested.get("hold_out_s", 0.0)),
+                    cycles=int(suggested.get("cycles", 4)),
+                )
+            else:
+                proto_name = str(suggested.get("protocol", ""))
+                preset = BreathingProtocol.from_name(proto_name)
+                if not preset:
+                    logger.warning("Unknown protocol recommendation: %s", proto_name)
+                    return None
+                protocol = preset
+
             return self._controller.start(protocol)
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Failed to initialize suggested protocol: %s", e)
@@ -238,6 +247,10 @@ class BreatheFlowOrchestrator:
             status = OrchestratorStatus.SUCCESS
         except Exception as e:
             logger.error("TTS provider failure: %s", e)
+            # Roll back protocol initialization if TTS fails so controller is not left in an orphaned active session
+            if tick is not None and self._controller.is_active:
+                self._controller.stop()
+                tick = None
             tts_audio = None
             tts_error = f"Speech synthesis failed: {e}"
             status = OrchestratorStatus.TTS_ERROR

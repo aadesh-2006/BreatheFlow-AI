@@ -1,6 +1,7 @@
 """Unit tests for BreatheFlow dialogue and session orchestrator."""
 
 import unittest
+import unittest.mock
 from typing import Any, Dict, Optional
 
 from breatheflow.config import BreatheFlowConfig
@@ -21,7 +22,12 @@ from breatheflow.providers.base import (
     TTSAudio,
     TTSProvider,
 )
-from breatheflow.providers.exceptions import GnaniAPIError, OllamaConnectionError
+from breatheflow.providers.exceptions import (
+    GnaniAPIError,
+    OllamaConnectionError,
+    OllamaResponseError,
+)
+from breatheflow.providers.gemini_brain import GeminiBrainAdapter
 
 
 class MockSTT(STTProvider):
@@ -223,6 +229,65 @@ class TestBreatheFlowOrchestrator(unittest.TestCase):
         self.assertEqual(result.spoken_response, "Let's do Box Breathing.")
         self.assertIsNone(result.audio_response)
         self.assertIn("Speech synthesis failed", str(result.error_message))
+        self.assertFalse(self.controller.is_active)
+        self.assertIsNone(result.controller_tick)
+
+    def test_tts_failure_cleans_up_active_controller_and_allows_subsequent_turn(self) -> None:
+        """Verify that when TTS fails after starting a protocol, controller is stopped and not left active.
+
+        Also verify that a subsequent turn can successfully initialize a protocol once TTS recovers.
+        """
+        failing_tts = MockTTS(fail=True)
+        orchestrator = BreatheFlowOrchestrator(
+            stt=self.stt,
+            brain=self.brain,
+            tts=failing_tts,
+            controller=self.controller,
+        )
+
+        # 1. Turn with failing TTS attempting to start box breathing
+        result_fail = orchestrator.process_voice_turn(b"SOME_AUDIO")
+        self.assertEqual(result_fail.status, OrchestratorStatus.TTS_ERROR)
+        self.assertIsNone(result_fail.audio_response)
+        self.assertIsNone(result_fail.controller_tick)
+        self.assertFalse(self.controller.is_active)
+        self.assertEqual(self.controller.phase, BreathingPhase.TERMINATED)
+
+        # 2. Recovery: TTS works on the subsequent turn, successfully starting a session
+        failing_tts.fail = False
+        result_success = orchestrator.process_voice_turn(b"SOME_AUDIO")
+        self.assertEqual(result_success.status, OrchestratorStatus.SUCCESS)
+        self.assertIsNotNone(result_success.audio_response)
+        self.assertIsNotNone(result_success.controller_tick)
+        self.assertTrue(self.controller.is_active)
+        self.assertEqual(self.controller.phase, BreathingPhase.INHALE)
+        self.assertEqual(self.controller.current_cycle, 1)
+
+    def test_tts_failure_does_not_stop_pre_existing_active_session(self) -> None:
+        """Verify that TTS failure during a mid-session turn does NOT abort a pre-existing active session."""
+        # Manually start a session beforehand
+        protocol = BreathingProtocol.coherent_breathing(cycles=5, duration_s=5.5)
+        self.controller.start(protocol)
+        self.controller.step(2.0)  # 2s into inhale
+        self.assertTrue(self.controller.is_active)
+        self.assertEqual(self.controller.phase, BreathingPhase.INHALE)
+
+        # Execute a turn where TTS fails
+        failing_tts = MockTTS(fail=True)
+        orchestrator = BreatheFlowOrchestrator(
+            stt=self.stt,
+            brain=self.brain,
+            tts=failing_tts,
+            controller=self.controller,
+        )
+
+        result = orchestrator.process_voice_turn(b"SOME_AUDIO")
+        self.assertEqual(result.status, OrchestratorStatus.TTS_ERROR)
+        # Pre-existing session was NOT stopped; still active in inhale phase with original protocol
+        self.assertTrue(self.controller.is_active)
+        self.assertEqual(self.controller.phase, BreathingPhase.INHALE)
+        self.assertEqual(self.controller.protocol.name, "Coherent Breathing")
+        self.assertIsNone(result.controller_tick)
 
     def test_turn_history_tracking(self) -> None:
         self.orchestrator.process_voice_turn(b"AUDIO_1")
@@ -286,6 +351,99 @@ class TestBreatheFlowOrchestrator(unittest.TestCase):
                 tts=self.tts,
                 max_history_turns=0,
             )
+
+    def test_orchestrator_initializes_simplified_protocol(self) -> None:
+        """Verify orchestrator resolves simplified protocol payloads to standard presets."""
+        simplified = {"action": "start_session", "protocol": "box_breathing"}
+        brain = MockBrain(spoken="Starting box breathing.", protocol=simplified)
+        orchestrator = BreatheFlowOrchestrator(
+            stt=self.stt,
+            brain=brain,
+            tts=self.tts,
+            controller=self.controller,
+        )
+
+        result = orchestrator.process_voice_turn(b"AUDIO")
+        self.assertEqual(result.status, OrchestratorStatus.SUCCESS)
+        self.assertTrue(self.controller.is_active)
+        self.assertEqual(self.controller.phase, BreathingPhase.INHALE)
+        self.assertIsNotNone(self.controller.protocol)
+        if self.controller.protocol:
+            self.assertEqual(self.controller.protocol.name, "Box Breathing")
+            self.assertEqual(self.controller.protocol.inhale_s, 4.0)
+            self.assertEqual(self.controller.protocol.cycles, 4)
+
+    def test_empty_content_brain_error_not_success(self) -> None:
+        """Verify empty model response error is handled as BRAIN_ERROR, not SUCCESS."""
+        class EmptyContentBrain(ConversationEngine):
+            def generate_turn(self, user_text: str, session_context: Optional[Dict[str, Any]] = None) -> ConversationTurn:
+                raise OllamaResponseError("Ollama completed generation with empty content")
+
+        orchestrator = BreatheFlowOrchestrator(
+            stt=self.stt,
+            brain=EmptyContentBrain(),
+            tts=self.tts,
+            controller=self.controller,
+        )
+
+        result = orchestrator.process_voice_turn(b"AUDIO")
+        self.assertEqual(result.status, OrchestratorStatus.BRAIN_ERROR)
+        self.assertIn("comfortable breath", result.spoken_response)
+        self.assertIn("Brain reasoning failed", str(result.error_message))
+        self.assertFalse(self.controller.is_active)
+        self.assertEqual(self.controller.phase, BreathingPhase.IDLE)
+
+    def test_active_session_rejects_simplified_protocol_switch(self) -> None:
+        """Verify running controller rejects simplified protocol suggestion and preserves active session."""
+        coherent = BreathingProtocol.coherent_breathing(cycles=5, duration_s=5.5)
+        self.controller.start(coherent)
+
+        simplified = {"action": "start_session", "protocol": "box_breathing"}
+        brain = MockBrain(spoken="Switch to box breathing.", protocol=simplified)
+        orchestrator = BreatheFlowOrchestrator(
+            stt=self.stt,
+            brain=brain,
+            tts=self.tts,
+            controller=self.controller,
+        )
+
+        result = orchestrator.process_voice_turn(b"AUDIO")
+        self.assertEqual(result.status, OrchestratorStatus.SUCCESS)
+        self.assertTrue(self.controller.is_active)
+        self.assertEqual(self.controller.protocol.name, "Coherent Breathing")
+        self.assertIsNone(result.controller_tick)
+
+    def test_orchestrator_with_gemini_brain_adapter(self) -> None:
+        """Verify orchestrator seamlessly runs with GeminiBrainAdapter."""
+        mock_client = unittest.mock.MagicMock()
+        mock_response = unittest.mock.MagicMock()
+        mock_response.text = (
+            '{"spoken_response": "Let\'s take a grounding box breath together.", '
+            '"action": "start_session", "protocol": "box_breathing"}'
+        )
+        mock_client.models.generate_content.return_value = mock_response
+
+        gemini_brain = GeminiBrainAdapter(
+            api_key="test-key",
+            model="gemini-3.5-flash-lite",
+            client=mock_client,
+        )
+        orchestrator = BreatheFlowOrchestrator(
+            stt=self.stt,
+            brain=gemini_brain,
+            tts=self.tts,
+            controller=self.controller,
+        )
+
+        result = orchestrator.process_voice_turn(b"AUDIO")
+        self.assertEqual(result.status, OrchestratorStatus.SUCCESS)
+        self.assertEqual(
+            result.spoken_response, "Let's take a grounding box breath together."
+        )
+        self.assertTrue(self.controller.is_active)
+        self.assertEqual(self.controller.phase, BreathingPhase.INHALE)
+        self.assertEqual(self.controller.protocol.name, "box_breathing")
+        self.assertEqual(self.controller.protocol.inhale_s, 4.0)
 
 
 if __name__ == "__main__":
