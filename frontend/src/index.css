@@ -1,0 +1,111 @@
+:root {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: #f8fafc;
+  background-color: #0b0f17;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 20%, #13242f 0%, #0b0f17 65%, #07090e 100%);
+  color: #f8fafc;
+  overflow-x: hidden;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+/* Pulsing Ambient Breathing Orb Animation */
+@keyframes orbPulseIdle {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 45px rgba(20, 184, 166, 0.2), inset 0 0 35px rgba(45, 212, 191, 0.25);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 75px rgba(45, 212, 191, 0.35), inset 0 0 50px rgba(94, 234, 212, 0.4);
+  }
+  100% {
+    transform: scale(0.96);
+    box-shadow: 0 0 45px rgba(20, 184, 166, 0.2), inset 0 0 35px rgba(45, 212, 191, 0.25);
+  }
+}
+
+@keyframes orbRecording {
+  0% {
+    transform: scale(0.98);
+    box-shadow: 0 0 55px rgba(239, 68, 68, 0.35), inset 0 0 40px rgba(248, 113, 113, 0.3);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 95px rgba(239, 68, 68, 0.55), inset 0 0 60px rgba(252, 165, 165, 0.45);
+  }
+  100% {
+    transform: scale(0.98);
+    box-shadow: 0 0 55px rgba(239, 68, 68, 0.35), inset 0 0 40px rgba(248, 113, 113, 0.3);
+  }
+}
+
+@keyframes orbProcessing {
+  0% {
+    transform: rotate(0deg) scale(1);
+    box-shadow: 0 0 60px rgba(99, 102, 241, 0.35);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.03);
+    box-shadow: 0 0 85px rgba(45, 212, 191, 0.45);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+    box-shadow: 0 0 60px rgba(99, 102, 241, 0.35);
+  }
+}
+
+@keyframes orbPlaying {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 70px rgba(45, 212, 191, 0.45), inset 0 0 40px rgba(94, 234, 212, 0.4);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 110px rgba(20, 184, 166, 0.65), inset 0 0 65px rgba(153, 246, 228, 0.55);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 70px rgba(45, 212, 191, 0.45), inset 0 0 40px rgba(94, 234, 212, 0.4);
+  }
+}
+
+.orb-idle {
+  animation: orbPulseIdle 5s ease-in-out infinite;
+}
+
+.orb-recording {
+  animation: orbRecording 1.8s ease-in-out infinite;
+}
+
+.orb-processing {
+  animation: orbProcessing 3s linear infinite;
+}
+
+.orb-playing {
+  animation: orbPlaying 3.5s ease-in-out infinite;
+}
